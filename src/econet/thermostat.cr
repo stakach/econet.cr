@@ -120,7 +120,7 @@ module EcoNet
       EcoNet.flag(field("@DEHUMENABLE"))
     end
 
-    def set_dehumidifier_set_point(humidity : Number) : Bool
+    def set_dehumidifier_set_point(humidity : Number) : Bool # ameba:disable Naming/AccessorMethodName
       return false unless valid_set_point?(humidity, dehumidifier_set_point_limits)
       publish({"@DEHUMSETPOINT" => humidity})
       true
@@ -146,7 +146,7 @@ module EcoNet
       supported_values("@MODE", Mode)
     end
 
-    def set_mode(mode : Mode) : Bool
+    def set_mode(mode : Mode) : Bool # ameba:disable Naming/AccessorMethodName
       set_enum("@MODE", mode)
     end
 
@@ -158,7 +158,7 @@ module EcoNet
       supported_values("@FANSPEED", FanSpeed)
     end
 
-    def set_fan_speed(speed : FanSpeed) : Bool
+    def set_fan_speed(speed : FanSpeed) : Bool # ameba:disable Naming/AccessorMethodName
       set_enum("@FANSPEED", speed)
     end
 
@@ -174,7 +174,7 @@ module EcoNet
       supported_values("@FANMODE", FanMode)
     end
 
-    def set_fan_mode(mode : FanMode) : Bool
+    def set_fan_mode(mode : FanMode) : Bool # ameba:disable Naming/AccessorMethodName
       set_enum("@FANMODE", mode)
     end
 
@@ -203,11 +203,11 @@ module EcoNet
       end
 
       sent = false
-      if (selected.auto? || selected.cooling?) && (cool = target_temp_cool) && valid_set_point?(cool, cool_set_point_limits)
+      if selected.in?(Mode::Auto, Mode::Cooling) && (cool = target_temp_cool) && valid_set_point?(cool, cool_set_point_limits)
         publish({"@COOLSETPOINT" => cool})
         sent = true
       end
-      if (selected.auto? || selected.heating? || selected.emergency_heat?) && (heat = target_temp_heat) && valid_set_point?(heat, heat_set_point_limits)
+      if selected.in?(Mode::Auto, Mode::Heating, Mode::EmergencyHeat) && (heat = target_temp_heat) && valid_set_point?(heat, heat_set_point_limits)
         publish({"@HEATSETPOINT" => heat})
         sent = true
       end

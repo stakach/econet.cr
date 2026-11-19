@@ -60,7 +60,8 @@ class SpecCloud
   private def serve(context)
     request = context.request
     response = context.response
-    payload = JSON.parse(request.body.not_nil!)
+    body = request.body || raise "Expected a JSON request body"
+    payload = JSON.parse(body)
     response.content_type = "application/json"
 
     case request.path.split('/').last

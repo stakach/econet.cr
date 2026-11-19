@@ -46,8 +46,7 @@ if heater.is_a?(EcoNet::WaterHeater)
 
   if client.subscribe
     begin
-      sent = heater.set_set_point_celsius(58)
-      puts "Set point outside device limits" unless sent
+      heater.set_point_celsius = 58
       sleep 5.seconds
     ensure
       client.unsubscribe
@@ -58,7 +57,7 @@ end
 
 `subscribe` waits for the broker and starts processing updates in the background. It returns `false` if equipment has yet to be discovered or none is available. While the subscription is open, the MQTT client reconnects after a dropped connection.
 
-`set_set_point` accepts native API units. `set_set_point_celsius` converts to the water heater's native temperature unit and rounds to the device's reported precision. Setters return `false` when a command is unsupported or outside reported limits. A return value of `true` means the command was sent. Read back the reported state to confirm the device applied it.
+`set_set_point` accepts native API units. Assigning to `set_point_celsius` converts to the water heater's native temperature unit and rounds to the device's reported precision. The Celsius setter raises `ArgumentError` for invalid targets or targets outside the reported limits. Command methods return `true` when a command was sent and `false` when it falls outside reported limits or the device lacks the capability. Read back the reported state to confirm the device applied the command.
 
 The EcoNet cloud endpoints are unofficial and can change independently of this shard.
 
@@ -67,6 +66,8 @@ The EcoNet cloud endpoints are unofficial and can change independently of this s
 ```sh
 shards install
 crystal spec
+shards build ameba
+bin/ameba
 ```
 
 The specs exercise REST and MQTT behavior against local servers with fixture data.

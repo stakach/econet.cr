@@ -76,7 +76,8 @@ describe EcoNet::Client do
     thermostat.fan_speed.should eq(EcoNet::Thermostat::FanSpeed::MedHi)
     gas.mode.should eq(EcoNet::WaterHeater::Mode::Gas)
     gas.enabled?.should be_nil
-    heater.set_point_celsius.not_nil!.should be_close(57.78, 0.01)
+    celsius = heater.set_point_celsius || raise "Expected a Celsius set point"
+    celsius.should be_close(57.78, 0.01)
     gas.set_point_celsius.should eq(49.0)
     expect_raises(EcoNet::ConnectionError) { heater.set_set_point(136) }
 
@@ -85,26 +86,28 @@ describe EcoNet::Client do
     socket, connect, subscribe = broker.connect
     connect.username.should eq("test-token")
     connect.version.should eq(MQTT::Version::V311)
-    subscribe.topic_hash.keys.sort.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED].sort)
+    subscribe.topic_hash.keys.sort!.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED])
     client.subscribe.should be_true
 
     heater.set_set_point(200).should be_false
-    heater.set_set_point_celsius(58).should be_true
+    expect_raises(ArgumentError) { heater.set_point_celsius = 200 }
+    expect_raises(ArgumentError) { heater.set_point_celsius = Float64::NAN }
+    heater.set_point_celsius = 58
     desired = SpecBroker.next_command(socket)
     desired["device_name"].should eq("heater")
     desired["serial_number"].should eq("heater-1")
     desired["transactionId"].as_s.should start_with("ANDROID_")
     desired["@SETPOINT"].should eq(136)
-    heater.set_set_point_celsius(59).should be_true
+    heater.set_point_celsius = 59
     SpecBroker.next_command(socket)["@SETPOINT"].should eq(138)
-    gas.set_set_point_celsius(51.26).should be_true
+    gas.set_point_celsius = 51.26
     SpecBroker.next_command(socket)["@SETPOINT"].should eq(51.3)
     heater.set_mode(EcoNet::WaterHeater::Mode::ElectricMode).should be_true
     desired = SpecBroker.next_command(socket)
     desired["@MODE"].should eq(3)
     desired["@ENABLED"].should eq(1)
     heater.set_away_mode(true).should be_true
-    SpecBroker.next_command(socket)["@AWAY"].should eq(true)
+    SpecBroker.next_command(socket)["@AWAY"].as_bool.should be_true
 
     heater_updates = Channel(Nil).new(1)
     heater.set_update_callback { heater_updates.send(nil) }
@@ -207,7 +210,7 @@ describe EcoNet::Client do
 
     restored, reconnect, subscription = broker.connect
     reconnect.client_id.should eq(connect.client_id)
-    subscription.topic_hash.keys.sort.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED].sort)
+    subscription.topic_hash.keys.sort!.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED])
 
     updates = Channel(Nil).new(1)
     heater.set_update_callback { updates.send(nil) }

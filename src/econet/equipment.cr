@@ -30,7 +30,7 @@ module EcoNet
       @update_callback = callback
     end
 
-    def set_update_callback(callback : Proc(Nil)?) : Nil
+    def set_update_callback(callback : Proc(Nil)?) : Nil # ameba:disable Naming/AccessorMethodName
       @update_callback = callback
     end
 
@@ -133,7 +133,7 @@ module EcoNet
       @api.refresh_equipment
     end
 
-    def set_away_mode(away : Bool) : Bool
+    def set_away_mode(away : Bool) : Bool # ameba:disable Naming/AccessorMethodName
       return false unless supports_away?
       publish({"@AWAY" => away})
       true
@@ -209,7 +209,7 @@ module EcoNet
       deadline = @resume_confirmation_deadline
       return unless deadline && MQTT.monotonic <= deadline
       message = dialog["message"]?.try(&.as_h?)
-      return unless message && !message.empty?
+      return if message.nil? || message.empty?
 
       @resume_confirmation_deadline = nil
       publish(message)

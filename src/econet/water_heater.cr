@@ -120,7 +120,7 @@ module EcoNet
       field("@OVERRIDESTATUS").try(&.as_s?)
     end
 
-    def set_mode(new_mode : Mode) : Bool
+    def set_mode(new_mode : Mode) : Bool # ameba:disable Naming/AccessorMethodName
       return false unless modes.includes?(new_mode)
 
       payload = {} of String => Int32
@@ -135,7 +135,7 @@ module EcoNet
     end
 
     # Send a set point in the units reported by the equipment's API.
-    def set_set_point(target : Number) : Bool
+    def set_set_point(target : Number) : Bool # ameba:disable Naming/AccessorMethodName
       return false unless valid_set_point?(target, set_point_limits)
       publish({"@SETPOINT" => target})
       true
@@ -149,13 +149,18 @@ module EcoNet
     end
 
     # Convert to the device's native units and round to its reported precision.
-    def set_set_point_celsius(target : Number) : Bool
-      return false unless target.to_f64.finite?
+    # Raises `ArgumentError` if the target is invalid or outside the reported limits.
+    def set_point_celsius=(target : Number) : Nil
+      raise ArgumentError.new("Celsius set point must be finite") unless target.to_f64.finite?
+
       native = celsius_set_points? ? target.to_f64 : target * 9.0 / 5.0 + 32
       decimals = EcoNet.number(constraints("@SETPOINT").try(&.["formatDecimal"]?)) || 0
       precision = decimals.clamp(0, 6).to_i
       rounded = native.round(precision)
-      precision.zero? && rounded.abs < Int64::MAX ? set_set_point(rounded.to_i64) : set_set_point(rounded)
+      value = precision.zero? && rounded.abs < Int64::MAX ? rounded.to_i64 : rounded
+      unless set_set_point(value)
+        raise ArgumentError.new("Celsius set point #{target} is outside the water heater's reported limits")
+      end
     end
 
     def todays_energy_usage : Float64?

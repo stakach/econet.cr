@@ -60,7 +60,7 @@ module EcoNet
     end
 
     # Discover equipment and reuse the same objects on subsequent calls.
-    def get_equipment : Array(Equipment)
+    def get_equipment : Array(Equipment) # ameba:disable Naming/AccessorMethodName
       equipment = @equipment_lock.synchronize { @equipment.values }
       equipment.empty? ? refresh_equipment : equipment
     end
@@ -150,7 +150,7 @@ module EcoNet
     # Send a desired state update using the device's API field names and units.
     def publish(payload, device_id : String, serial_number : String) : Nil
       mqtt = @mqtt_client
-      raise ConnectionError.new("Subscribe to EcoNet MQTT before publishing") unless mqtt && !mqtt.closed?
+      raise ConnectionError.new("Subscribe to EcoNet MQTT before publishing") if mqtt.nil? || mqtt.closed?
 
       message = JSON.build do |json|
         json.object do
@@ -247,7 +247,7 @@ module EcoNet
       decoded = JSON.parse(response.body)
       raise InvalidResponseFormat.new("Expected an EcoNet JSON object") unless decoded.as_h?
       decoded
-    rescue error : JSON::ParseException
+    rescue JSON::ParseException
       raise InvalidResponseFormat.new("EcoNet returned invalid JSON")
     rescue error : IO::Error | Socket::Error | OpenSSL::Error
       raise ConnectionError.new("Could not reach the EcoNet HTTP API", error)
