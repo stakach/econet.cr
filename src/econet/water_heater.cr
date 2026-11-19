@@ -1,29 +1,51 @@
 module EcoNet
   enum WaterHeaterOperationMode
-    Off          =  1
-    ElectricMode =  2
-    EnergySaving =  3
-    HeatPumpOnly =  4
-    HighDemand   =  5
-    Gas          =  6
-    Performance  =  8
-    Vacation     =  9
-    Unknown      = 99
+    Off               =  1
+    ElectricMode      =  2
+    EnergySaving      =  3
+    HeatPumpOnly      =  4
+    HighDemand        =  5
+    Gas               =  6
+    Performance       =  8
+    Vacation          =  9
+    Default           = 13
+    OffPeak           = 14
+    Solar             = 15
+    ShoulderEmergency = 16
+    PeakEmergency     = 17
+    PeakNoHeating     = 18
+    ShoulderNoHeating = 19
+    NoHeatingOff      = 20
+    Unknown           = 99
 
     def self.by_string(value : String?) : self
-      case value.try(&.strip.downcase)
-      when "off"                           then Off
-      when "electric mode", "electric"     then ElectricMode
-      when "energy saving", "energy saver" then EnergySaving
-      when "heat pump only", "heat pump"   then HeatPumpOnly
-      when "high demand"                   then HighDemand
-      when "gas"                           then Gas
-      when "performance"                   then Performance
-      when "vacation"                      then Vacation
-      else                                      Unknown
-      end
+      value.try { |label| WATER_HEATER_MODE_LABELS[label.strip.downcase]? } || Unknown
     end
   end
+
+  private WATER_HEATER_MODE_LABELS = {
+    "off"                   => WaterHeaterOperationMode::Off,
+    "off/disabled"          => WaterHeaterOperationMode::Off,
+    "electric mode"         => WaterHeaterOperationMode::ElectricMode,
+    "electric"              => WaterHeaterOperationMode::ElectricMode,
+    "energy saving"         => WaterHeaterOperationMode::EnergySaving,
+    "energy saver"          => WaterHeaterOperationMode::EnergySaving,
+    "heat pump only"        => WaterHeaterOperationMode::HeatPumpOnly,
+    "heat pump"             => WaterHeaterOperationMode::HeatPumpOnly,
+    "high demand"           => WaterHeaterOperationMode::HighDemand,
+    "gas"                   => WaterHeaterOperationMode::Gas,
+    "performance"           => WaterHeaterOperationMode::Performance,
+    "vacation"              => WaterHeaterOperationMode::Vacation,
+    "holiday"               => WaterHeaterOperationMode::Vacation,
+    "default"               => WaterHeaterOperationMode::Default,
+    "off peak"              => WaterHeaterOperationMode::OffPeak,
+    "solar"                 => WaterHeaterOperationMode::Solar,
+    "shoulder (emergency)"  => WaterHeaterOperationMode::ShoulderEmergency,
+    "peak (emergency)"      => WaterHeaterOperationMode::PeakEmergency,
+    "peak (no heating)"     => WaterHeaterOperationMode::PeakNoHeating,
+    "shoulder (no heating)" => WaterHeaterOperationMode::ShoulderNoHeating,
+    "no heating (off)"      => WaterHeaterOperationMode::NoHeatingOff,
+  }
 
   class WaterHeater < Equipment
     alias Mode = WaterHeaterOperationMode
@@ -53,7 +75,11 @@ module EcoNet
     end
 
     def running? : Bool
-      running_state.try { |state| !state.empty? } == true
+      if state = running_state
+        !state.strip.downcase.in?("", "not running")
+      else
+        false
+      end
     end
 
     def running_state : String?
@@ -152,8 +178,12 @@ module EcoNet
 
     # EcoNet water heaters typically report whole degrees Fahrenheit.
     def set_point_celsius : Float64?
-      if target = set_point
-        celsius_set_points? ? target.to_f64 : (target - 32) * 5.0 / 9.0
+      set_point.try { |value| to_celsius(value) }
+    end
+
+    def set_point_limits_celsius : Tuple(Float64, Float64)?
+      if bounds = set_point_limits
+        {to_celsius(bounds[0]), to_celsius(bounds[1])}
       end
     end
 
@@ -228,6 +258,10 @@ module EcoNet
     private def celsius_set_points? : Bool
       unit = constraints("@SETPOINT").try(&.["units"]?).try(&.as_s?)
       unit.try(&.strip.downcase).in?("deg c", "°c", "c", "celsius")
+    end
+
+    private def to_celsius(value : NumericValue) : Float64
+      celsius_set_points? ? value.to_f64 : (value - 32) * 5.0 / 9.0
     end
 
     private def usage_report(kind : String, key : String, start : Time?, end_time : Time?, offset : Bool) : JsonObject?

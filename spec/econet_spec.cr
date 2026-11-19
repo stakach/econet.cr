@@ -80,6 +80,7 @@ describe EcoNet::Client do
     celsius = heater.set_point_celsius || raise "Expected a Celsius set point"
     celsius.should be_close(57.78, 0.01)
     gas.set_point_celsius.should eq(49.0)
+    gas.set_point_limits_celsius.should eq({45.0, 60.0})
     expect_raises(EcoNet::ConnectionError) { heater.set_set_point(136) }
     expect_raises(EcoNet::ConnectionError) { heater.set_point = 136 }
 
@@ -180,6 +181,20 @@ describe EcoNet::Client do
     gas.modes.should eq([EcoNet::WaterHeater::Mode::Gas])
     gas.mode = EcoNet::WaterHeater::Mode::Gas
     SpecBroker.next_command(socket)["@MODE"].should eq(0)
+
+    SpecBroker.report(socket, {
+      "device_name"   => "heater",
+      "serial_number" => "heater-1",
+      "@MODE"         => {"value" => 1, "constraints" => {"enumText" => ["Off/Disabled", "Default", "Off Peak", "Solar", "Holiday"]}},
+      "@RUNNING"      => "Not Running",
+      "@ENABLED"      => 1,
+    })
+    wait_for_update(heater_updates)
+    heater.mode.should eq(EcoNet::WaterHeater::Mode::Default)
+    heater.running?.should be_false
+    heater.set_point_limits_celsius.try(&.[1]).should eq(60.0)
+    heater.mode = EcoNet::WaterHeater::Mode::Vacation
+    SpecBroker.next_command(socket)["@MODE"].should eq(4)
 
     client.unsubscribe
     client.subscribed?.should be_false
