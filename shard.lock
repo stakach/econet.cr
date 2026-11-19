@@ -1,0 +1,13 @@
+version: 2.0
+shards:
+  bindata:
+    git: https://github.com/spider-gazelle/bindata.git
+    version: 3.2.1
+
+  mqtt:
+    git: https://github.com/spider-gazelle/crystal-mqtt.git
+    version: 2.0.2
+
+  tokenizer:
+    git: https://github.com/spider-gazelle/tokenizer.git
+    version: 1.1.1
