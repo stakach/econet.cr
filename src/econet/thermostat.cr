@@ -88,12 +88,24 @@ module EcoNet
       EcoNet.number(field("@COOLSETPOINT"))
     end
 
+    def cool_set_point=(target : Number) : Nil
+      unless set_set_point(target_temp_cool: target)
+        raise ArgumentError.new("Cooling target #{target} is outside reported limits or unavailable in the current mode")
+      end
+    end
+
     def cool_set_point_limits : Tuple(NumericValue, NumericValue)?
       limits("@COOLSETPOINT")
     end
 
     def heat_set_point : NumericValue?
       EcoNet.number(field("@HEATSETPOINT"))
+    end
+
+    def heat_set_point=(target : Number) : Nil
+      unless set_set_point(target_temp_heat: target)
+        raise ArgumentError.new("Heating target #{target} is outside reported limits or unavailable in the current mode")
+      end
     end
 
     def heat_set_point_limits : Tuple(NumericValue, NumericValue)?
@@ -118,6 +130,12 @@ module EcoNet
 
     def dehumidifier_enabled? : Bool?
       EcoNet.flag(field("@DEHUMENABLE"))
+    end
+
+    def dehumidifier_set_point=(humidity : Number) : Nil
+      unless set_dehumidifier_set_point(humidity)
+        raise ArgumentError.new("Dehumidifier target #{humidity} is outside the thermostat's reported limits")
+      end
     end
 
     def set_dehumidifier_set_point(humidity : Number) : Bool # ameba:disable Naming/AccessorMethodName
@@ -146,6 +164,10 @@ module EcoNet
       supported_values("@MODE", Mode)
     end
 
+    def mode=(mode : Mode) : Nil
+      raise ArgumentError.new("Unsupported thermostat mode: #{mode}") unless set_mode(mode)
+    end
+
     def set_mode(mode : Mode) : Bool # ameba:disable Naming/AccessorMethodName
       set_enum("@MODE", mode)
     end
@@ -156,6 +178,10 @@ module EcoNet
 
     def fan_speeds : Array(FanSpeed)
       supported_values("@FANSPEED", FanSpeed)
+    end
+
+    def fan_speed=(speed : FanSpeed) : Nil
+      raise ArgumentError.new("Unsupported thermostat fan speed: #{speed}") unless set_fan_speed(speed)
     end
 
     def set_fan_speed(speed : FanSpeed) : Bool # ameba:disable Naming/AccessorMethodName
@@ -172,6 +198,10 @@ module EcoNet
 
     def fan_modes : Array(FanMode)
       supported_values("@FANMODE", FanMode)
+    end
+
+    def fan_mode=(mode : FanMode) : Nil
+      raise ArgumentError.new("Unsupported thermostat fan mode: #{mode}") unless set_fan_mode(mode)
     end
 
     def set_fan_mode(mode : FanMode) : Bool # ameba:disable Naming/AccessorMethodName

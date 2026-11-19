@@ -14,6 +14,7 @@ describe EcoNet::Client do
     zone = equipment[EcoNet::EquipmentType::Thermostat].last.as(EcoNet::Thermostat)
     zone.device_id.should eq("hvac")
     zone.zone_id.should eq("Zone 1")
+    zone.schedule_status.should be_nil
 
     cloud.location_response = SpecCloud::LOCATION_RESPONSE.sub("Zone 1", "Upstairs")
     zone.force_update_from_api
@@ -80,6 +81,7 @@ describe EcoNet::Client do
     celsius.should be_close(57.78, 0.01)
     gas.set_point_celsius.should eq(49.0)
     expect_raises(EcoNet::ConnectionError) { heater.set_set_point(136) }
+    expect_raises(EcoNet::ConnectionError) { heater.set_point = 136 }
 
     client.subscribe.should be_true
     client.subscribed?.should be_true
@@ -90,6 +92,7 @@ describe EcoNet::Client do
     client.subscribe.should be_true
 
     heater.set_set_point(200).should be_false
+    expect_raises(ArgumentError) { heater.set_point = 200 }
     expect_raises(ArgumentError) { heater.set_point_celsius = 200 }
     expect_raises(ArgumentError) { heater.set_point_celsius = Float64::NAN }
     heater.set_point_celsius = 58
@@ -102,15 +105,20 @@ describe EcoNet::Client do
     SpecBroker.next_command(socket)["@SETPOINT"].should eq(138)
     gas.set_point_celsius = 51.26
     SpecBroker.next_command(socket)["@SETPOINT"].should eq(51.3)
-    heater.set_mode(EcoNet::WaterHeater::Mode::ElectricMode).should be_true
+    heater.set_point = 137
+    SpecBroker.next_command(socket)["@SETPOINT"].should eq(137)
+    heater.set_point.should eq(136)
+    expect_raises(ArgumentError) { heater.mode = EcoNet::WaterHeater::Mode::Gas }
+    heater.mode = EcoNet::WaterHeater::Mode::ElectricMode
     desired = SpecBroker.next_command(socket)
     desired["@MODE"].should eq(3)
     desired["@ENABLED"].should eq(1)
-    heater.set_away_mode(true).should be_true
+    expect_raises(ArgumentError) { gas.away = true }
+    heater.away = true
     SpecBroker.next_command(socket)["@AWAY"].as_bool.should be_true
 
     heater_updates = Channel(Nil).new(1)
-    heater.set_update_callback { heater_updates.send(nil) }
+    heater.on_update { heater_updates.send(nil) }
     SpecBroker.report(socket, {
       "device_name" => "heater", "serial_number" => "heater-1",
       "@SETPOINT" => 138, "@ENABLED" => 0, "@RUNNING" => "Heating", "@HOTWATER" => "ic_tank_fourty_percent.png",
@@ -124,25 +132,34 @@ describe EcoNet::Client do
     heater.tank_hot_water_availability.should eq(66)
 
     thermostat_updates = Channel(Nil).new(1)
-    thermostat.set_update_callback { thermostat_updates.send(nil) }
+    thermostat.on_update { thermostat_updates.send(nil) }
     SpecBroker.report(socket, {"device_name" => "hvac", "serial_number" => "hvac-1", "@MODE" => 2})
     wait_for_update(thermostat_updates)
     thermostat.mode.should eq(EcoNet::Thermostat::Mode::Cooling)
     thermostat.set_set_point(77).should be_true
     SpecBroker.next_command(socket)["@COOLSETPOINT"].should eq(77)
-    thermostat.set_mode(EcoNet::Thermostat::Mode::Auto).should be_true
+    expect_raises(ArgumentError) { thermostat.heat_set_point = 66 }
+    expect_raises(ArgumentError) { thermostat.cool_set_point = 100 }
+    thermostat.cool_set_point = 78
+    SpecBroker.next_command(socket)["@COOLSETPOINT"].should eq(78)
+    expect_raises(ArgumentError) { thermostat.mode = EcoNet::Thermostat::Mode::Unknown }
+    thermostat.mode = EcoNet::Thermostat::Mode::Auto
     SpecBroker.next_command(socket)["@MODE"].should eq(3)
     SpecBroker.report(socket, {"device_name" => "hvac", "serial_number" => "hvac-1", "@MODE" => {"value" => 3}})
     wait_for_update(thermostat_updates)
+    thermostat.heat_set_point = 67
+    SpecBroker.next_command(socket)["@HEATSETPOINT"].should eq(67)
     thermostat.set_set_point(70, target_temp_cool: 78, target_temp_heat: 66).should be_true
     SpecBroker.next_command(socket)["@COOLSETPOINT"].should eq(78)
     SpecBroker.next_command(socket)["@HEATSETPOINT"].should eq(66)
     thermostat.set_fan_speed(EcoNet::Thermostat::FanSpeed::High).should be_false
-    thermostat.set_fan_speed(EcoNet::Thermostat::FanSpeed::Low).should be_true
+    expect_raises(ArgumentError) { thermostat.fan_speed = EcoNet::Thermostat::FanSpeed::High }
+    thermostat.fan_speed = EcoNet::Thermostat::FanSpeed::Low
     SpecBroker.next_command(socket)["@FANSPEED"].should eq(1)
-    thermostat.set_fan_mode(EcoNet::Thermostat::FanMode::OnContinuous).should be_true
+    thermostat.fan_mode = EcoNet::Thermostat::FanMode::OnContinuous
     SpecBroker.next_command(socket)["@FANMODE"].should eq(1)
-    thermostat.set_dehumidifier_set_point(55).should be_true
+    expect_raises(ArgumentError) { thermostat.dehumidifier_set_point = 90 }
+    thermostat.dehumidifier_set_point = 55
     SpecBroker.next_command(socket)["@DEHUMSETPOINT"].should eq(55)
 
     zone_updates = Channel(Nil).new(1)
@@ -151,6 +168,18 @@ describe EcoNet::Client do
     wait_for_update(zone_updates)
     thermostat.wifi_signal.should eq(-67)
     zone.wifi_signal.should eq(-67)
+
+    gas_updates = Channel(Nil).new(1)
+    gas.on_update { gas_updates.send(nil) }
+    SpecBroker.report(socket, {
+      "device_name"   => "gas-heater",
+      "serial_number" => "heater-2",
+      "@MODE"         => {"value" => 0, "constraints" => {"enumText" => ["Electric/Gas  "]}},
+    })
+    wait_for_update(gas_updates)
+    gas.modes.should eq([EcoNet::WaterHeater::Mode::Gas])
+    gas.mode = EcoNet::WaterHeater::Mode::Gas
+    SpecBroker.next_command(socket)["@MODE"].should eq(0)
 
     client.unsubscribe
     client.subscribed?.should be_false
@@ -167,12 +196,14 @@ describe EcoNet::Client do
     broker = SpecBroker.new
     client = cloud.login(broker)
     heater = client.get_equipment.first.as(EcoNet::WaterHeater)
+    heater.schedule_status.should eq(EcoNet::ScheduleStatus::Overridden)
+    heater.following_schedule?.should be_false
     client.subscribe
     socket = broker.connect[0]
 
     dialog = {"device_name" => "heater", "serial_number" => "heater-1", "dialog" => {"message" => {"@SCHEDULERESUME" => "resume"}}}
     updates = Channel(Nil).new(1)
-    heater.set_update_callback { updates.send(nil) }
+    heater.on_update { updates.send(nil) }
     SpecBroker.report(socket, dialog)
     SpecBroker.report(socket, {"device_name" => "heater", "serial_number" => "heater-1", "@AWAY" => true})
     wait_for_update(updates)
@@ -188,7 +219,12 @@ describe EcoNet::Client do
 
     SpecBroker.report(socket, {"device_name" => "heater", "serial_number" => "heater-1", "@SCHEDULESTATUS" => "Following Schedule"})
     wait_for_update(updates)
+    heater.schedule_status.should eq(EcoNet::ScheduleStatus::Following)
     heater.following_schedule?.should be_true
+    SpecBroker.report(socket, {"device_name" => "heater", "serial_number" => "heater-1", "@SCHEDULESTATUS" => "Vendor status"})
+    wait_for_update(updates)
+    heater.schedule_status.should eq(EcoNet::ScheduleStatus::Unknown)
+    heater.schedule_status_text.should eq("Vendor status")
 
     client.unsubscribe
     socket.read_bytes(MQTT::V3::Header).id.should eq(MQTT::RequestType::Disconnect)

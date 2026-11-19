@@ -13,6 +13,12 @@ module EcoNet
     end
   end
 
+  enum ScheduleStatus
+    Following
+    Overridden
+    Unknown
+  end
+
   abstract class Equipment
     getter device_id : String
     getter serial_number : String
@@ -26,8 +32,13 @@ module EcoNet
 
     abstract def type : EquipmentType
 
-    def set_update_callback(&callback : -> Nil) : Nil
+    # Register a callback for equipment state updates.
+    def on_update(&callback : -> Nil) : Nil
       @update_callback = callback
+    end
+
+    def set_update_callback(&callback : -> Nil) : Nil
+      on_update(&callback)
     end
 
     def set_update_callback(callback : Proc(Nil)?) : Nil # ameba:disable Naming/AccessorMethodName
@@ -105,12 +116,24 @@ module EcoNet
       @info.has_key?("@SCHEDULESTATUS")
     end
 
-    def schedule_status : String?
+    def schedule_status : ScheduleStatus?
+      text = schedule_status_text
+      return unless text
+
+      case text.strip.downcase
+      when "following schedule"  then ScheduleStatus::Following
+      when "schedule overridden" then ScheduleStatus::Overridden
+      else                            ScheduleStatus::Unknown
+      end
+    end
+
+    # Return the original status label reported by the device.
+    def schedule_status_text : String?
       field("@SCHEDULESTATUS").try(&.as_s?)
     end
 
     def following_schedule? : Bool
-      schedule_status == "Following Schedule"
+      schedule_status == ScheduleStatus::Following
     end
 
     def alert_count : Int64?
@@ -131,6 +154,10 @@ module EcoNet
 
     def force_update_from_api : Nil
       @api.refresh_equipment
+    end
+
+    def away=(away : Bool) : Nil
+      raise ArgumentError.new("Equipment does not support away mode") unless set_away_mode(away)
     end
 
     def set_away_mode(away : Bool) : Bool # ameba:disable Naming/AccessorMethodName

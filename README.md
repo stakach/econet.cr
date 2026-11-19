@@ -40,7 +40,7 @@ Call `refresh_equipment` to fetch fresh state while keeping existing equipment o
 ```crystal
 heater = client.get_equipment.find { |item| item.is_a?(EcoNet::WaterHeater) }
 if heater.is_a?(EcoNet::WaterHeater)
-  heater.set_update_callback do
+  heater.on_update do
     puts "Updated water-heater set point: #{heater.set_point_celsius} °C"
   end
 
@@ -57,7 +57,17 @@ end
 
 `subscribe` waits for the broker and starts processing updates in the background. It returns `false` if equipment has yet to be discovered or none is available. While the subscription is open, the MQTT client reconnects after a dropped connection.
 
-`set_set_point` accepts native API units. Assigning to `set_point_celsius` converts to the water heater's native temperature unit and rounds to the device's reported precision. The Celsius setter raises `ArgumentError` for invalid targets or targets outside the reported limits. Command methods return `true` when a command was sent and `false` when it falls outside reported limits or the device lacks the capability. Read back the reported state to confirm the device applied the command.
+| Equipment | Assignment setters |
+| --- | --- |
+| Water heater | `set_point=` (native units), `set_point_celsius=`, `mode=` |
+| Thermostat | `heat_set_point=`, `cool_set_point=`, `mode=`, `fan_speed=`, `fan_mode=`, `dehumidifier_set_point=` |
+| Both | `away=` |
+
+The Celsius setter converts to the water heater's native unit and rounds to its reported precision. Assignment setters raise `ArgumentError` for invalid values or unsupported settings. Read back the reported state to confirm the device applied a command.
+
+The thermostat checks heating and cooling targets against its current mode and reported limits. In auto mode, use `thermostat.set_set_point(target_temp_cool: 76, target_temp_heat: 68)` to send both targets in native units. The `set_*` command methods return `true` when they send a command and `false` when the request is invalid or unsupported.
+
+`schedule_status` returns `EcoNet::ScheduleStatus::Following`, `Overridden`, or `Unknown`, with `nil` when the device supplies no status. Use `schedule_status_text` for the original device label.
 
 The EcoNet cloud endpoints are unofficial and can change independently of this shard.
 

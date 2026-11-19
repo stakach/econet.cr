@@ -8,7 +8,6 @@ module EcoNet
     Gas          =  6
     Performance  =  8
     Vacation     =  9
-    ElectricGas  = 12
     Unknown      = 99
 
     def self.by_string(value : String?) : self
@@ -21,7 +20,6 @@ module EcoNet
       when "gas"                           then Gas
       when "performance"                   then Performance
       when "vacation"                      then Vacation
-      when "electric/gas"                  then ElectricGas
       else                                      Unknown
       end
     end
@@ -120,6 +118,10 @@ module EcoNet
       field("@OVERRIDESTATUS").try(&.as_s?)
     end
 
+    def mode=(mode : Mode) : Nil
+      raise ArgumentError.new("Unsupported water heater mode: #{mode}") unless set_mode(mode)
+    end
+
     def set_mode(new_mode : Mode) : Bool # ameba:disable Naming/AccessorMethodName
       return false unless modes.includes?(new_mode)
 
@@ -132,6 +134,13 @@ module EcoNet
 
       publish(payload)
       true
+    end
+
+    # Assign a set point in the units reported by the equipment's API.
+    def set_point=(target : Number) : Nil
+      unless set_set_point(target)
+        raise ArgumentError.new("Set point #{target} is outside the water heater's reported limits")
+      end
     end
 
     # Send a set point in the units reported by the equipment's API.
@@ -212,8 +221,8 @@ module EcoNet
     end
 
     private def mode_for(label : String?) : Mode
-      candidate = Mode.by_string(label)
-      candidate.electric_gas? ? default_mode : candidate
+      return default_mode if label.try(&.strip.downcase) == "electric/gas"
+      Mode.by_string(label)
     end
 
     private def celsius_set_points? : Bool
