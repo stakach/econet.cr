@@ -116,6 +116,8 @@ module EcoNet
           mqtt.connect(
             username: @user_token,
             password: SYSTEM_KEY,
+            # Allow a second keepalive check before the 75-second socket read timeout.
+            keep_alive: 30,
             client_id: "#{@email}#{Time.utc.to_unix_ms}_android",
           ).success!
 

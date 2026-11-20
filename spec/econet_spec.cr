@@ -89,6 +89,7 @@ describe EcoNet::Client do
     socket, connect, subscribe = broker.connect
     connect.username.should eq("test-token")
     connect.version.should eq(MQTT::Version::V311)
+    connect.keep_alive_seconds.should eq(30)
     subscribe.topic_hash.keys.sort!.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED])
     client.subscribe.should be_true
 
@@ -261,6 +262,7 @@ describe EcoNet::Client do
 
     restored, reconnect, subscription = broker.connect
     reconnect.client_id.should eq(connect.client_id)
+    reconnect.keep_alive_seconds.should eq(connect.keep_alive_seconds)
     subscription.topic_hash.keys.sort!.should eq([SpecBroker::DESIRED, SpecBroker::REPORTED])
 
     updates = Channel(Nil).new(1)
